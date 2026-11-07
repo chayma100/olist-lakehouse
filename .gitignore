@@ -1,0 +1,33 @@
+# Environnement Python
+.venv/
+__pycache__/
+*.pyc
+
+# Secrets : ne jamais les mettre sur GitHub
+.env
+
+# Données : trop lourdes et non versionnées
+data/raw/*
+data/batches/*
+data/serving/*
+data/warehouse/*
+!data/raw/.gitkeep
+!data/batches/.gitkeep
+!data/serving/.gitkeep
+!data/warehouse/.gitkeep
+*.duckdb
+*.parquet
+
+# dbt
+dbt_project/target/
+dbt_project/logs/
+dbt_project/profiles.yml
+
+# Terraform
+infra/terraform/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+
+# Divers
+.DS_Store

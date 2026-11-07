@@ -1,0 +1,25 @@
+pip install -r requirements.txt# Installe les paquets phase par phase (décommente au moment voulu).
+
+# Phase 1 : ETL local
+duckdb
+# dbt-duckdb
+# pandas
+
+# Phase 2 : Azure
+# azure-storage-blob
+# python-dotenv
+
+# Phase 5 : agent
+# langchain
+# langgraph
+# sqlglot
+# chromadb
+
+# Phase 6 : API + dashboard
+# fastapi
+# uvicorn
+# streamlit
+# plotly
+
+# Qualité
+# pytest
