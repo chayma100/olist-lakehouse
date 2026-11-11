@@ -1,0 +1,11 @@
+id,type,category,status,steps,latency_s,tokens,passed,detail
+q01,sql,simple,answered,2,3.734,3771,True,match
+q02,sql,simple,answered,2,3.886,4206,True,match
+q03,sql,simple,answered,2,2.564,3791,True,match
+q04,sql,simple,answered,2,3.165,3918,True,match
+q05,sql,simple,error,2,4.485,1841,True,match
+q06,sql,simple,error,1,2.085,0,False,no successful SQL (error): LLM error: Error code: 429
+q07,sql,business_rule,error,1,2.443,0,False,no successful SQL (error): LLM error: Error code: 429
+q08,sql,business_rule,error,2,6.316,1843,True,match
+q09,sql,simple,error,1,2.055,0,False,no successful SQL (error): LLM error: Error code: 429
+q10,sql,business_rule,error,1,2.156,0,False,no successful SQL (error): LLM error: Error code: 429

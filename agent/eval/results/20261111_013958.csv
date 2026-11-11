@@ -1,0 +1,3 @@
+model,backend,n,exec_accuracy,p50_latency_s,p95_latency_s,avg_tokens,refusal_rate,avg_steps
+groq-gpt-oss-20b,mcp,10,0.8,20.24,21.81,3376,,2.0
+gemini-flash,mcp,10,0.6,3.17,6.32,1937,,1.6

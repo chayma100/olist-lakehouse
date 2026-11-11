@@ -1,0 +1,12 @@
+{
+  "groq-gpt-oss-20b": {
+    "base_url": "https://api.groq.com/openai/v1",
+    "model": "openai/gpt-oss-20b",
+    "api_key_env": "LLM_API_KEY"
+  },
+  "gemini-flash": {
+    "base_url": "https://generativelanguage.googleapis.com/v1beta/openai/",
+    "model": "gemini-2.5-flash",
+    "api_key_env": "GEMINI_API_KEY"
+  }
+}

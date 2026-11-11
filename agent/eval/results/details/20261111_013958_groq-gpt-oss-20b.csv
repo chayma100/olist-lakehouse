@@ -1,0 +1,11 @@
+id,type,category,status,steps,latency_s,tokens,passed,detail
+q01,sql,simple,answered,2,2.507,3292,True,match
+q02,sql,simple,answered,2,2.562,3604,True,match
+q03,sql,simple,answered,2,7.009,3308,True,match
+q04,sql,simple,answered,2,21.104,3443,True,match
+q05,sql,simple,answered,2,19.8,3255,True,match
+q06,sql,simple,answered,2,20.582,3307,False,result differs from reference
+q07,sql,business_rule,answered,2,21.811,3252,True,match
+q08,sql,business_rule,answered,2,20.24,3316,True,match
+q09,sql,simple,answered,2,12.648,3451,False,result differs from reference
+q10,sql,business_rule,answered,2,21.606,3531,True,match
