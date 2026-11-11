@@ -1,0 +1,7 @@
+line-length = 120
+target-version = "py311"
+extend-exclude = ["notebooks", "dbt_project"]
+
+[lint]
+select = ["E", "F", "I", "B"]
+ignore = ["E501", "E402", "B008"]

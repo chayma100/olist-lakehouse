@@ -1,0 +1,12 @@
+# Runtime de l'API (agent + FastAPI)
+openai
+sqlglot
+pandas
+matplotlib
+python-dotenv
+databricks-sql-connector
+mcp
+fastapi
+uvicorn
+langsmith
+httpx

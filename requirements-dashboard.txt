@@ -1,0 +1,4 @@
+# Runtime du dashboard Streamlit (il ne parle qu'à l'API)
+streamlit
+pandas
+httpx

@@ -1,0 +1,6 @@
+# Tests et qualité de code (CI)
+-r requirements-agent.txt
+-r requirements-dashboard.txt
+pytest
+duckdb
+ruff
