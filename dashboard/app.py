@@ -5,11 +5,6 @@ Lancer (après avoir démarré l'API) :
 """
 import glob
 import os
-
-import pandas as pd
-import streamlit as st
-import glob
-import os
 import sys
 from pathlib import Path
 
