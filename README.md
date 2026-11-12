@@ -1,130 +1,134 @@
-# Olist Lakehouse : pipeline Bronze / Silver / Gold sur Databricks
+# Olist Data Agent : agent text-to-SQL sur une plateforme Databricks
 
-Pipeline de données de bout en bout sur le jeu de données e-commerce brésilien **Olist** (environ 100 000 commandes), construit en **architecture médaillon** sur Databricks (tables Delta, Spark SQL).
+Un agent LLM qui répond en langage naturel à des questions sur des données e-commerce (Olist), en interrogeant une couche **gold** construite sur **Databricks** (architecture médaillon), avec recherche d'avis clients par **BM25**, garde-fous, observabilité **LangSmith**, évaluation sur un golden set, API **FastAPI**, interface **Streamlit** et CI/CD **GitHub Actions**.
 
-Ce projet met en pratique les notions de lakehouse, de qualité et de gouvernance des données : les anomalies de la source sont **détectées, marquées et documentées**, et non supprimées.
+> Projet personnel d'apprentissage. Le jeu de données est petit (environ 100 000 commandes) : Databricks est choisi pour l'architecture, la gouvernance (Unity Catalog) et la démonstration d'un pipeline médaillon, pas pour le volume.
 
 ## Architecture
 
 ```mermaid
 flowchart LR
-    A[8 fichiers CSV Olist] --> B[Bronze<br/>données brutes]
-    B --> C[Silver<br/>types, indicateurs, renommages]
-    C --> D[Gold<br/>modèle en étoile]
-    D --> E[Indicateurs KPI]
+    CSV[CSV Olist] --> B[Bronze]
+    B --> S[Silver]
+    S --> G[Gold<br/>faits, dimensions, KPI]
+    G --> MCP[Serveur MCP SQL<br/>Databricks]
+    MCP --> A[Agent LLM<br/>boucle ReAct]
+    R[Index BM25<br/>avis clients] --> A
+    A --> API[FastAPI]
+    API --> UI[Streamlit]
+    A -.traces.-> LS[LangSmith]
 ```
 
-| Couche | Rôle | Schéma Databricks |
-|---|---|---|
-| **Bronze** | Copie brute des CSV, tout en texte, avec la date de chargement | `workspace.bronze` |
-| **Silver** | Types corrects, indicateurs `flag_...` pour chaque anomalie, noms de colonnes corrigés, aucune ligne supprimée | `workspace.silver` |
-| **Gold** | Tables prêtes pour l'analyse : faits, dimensions et indicateurs | `workspace.gold` |
+- **ETL médaillon** : notebooks Databricks (`databricks/notebooks/`) qui ingèrent, nettoient et modélisent les données en tables Unity Catalog (`workspace.gold`).
+- **Agent** : une vraie boucle d'agent. Le LLM choisit les outils, le code les exécute, renvoie les résultats, jusqu'à une réponse finale ou une limite (étapes, appels d'outils, tokens). Pas de workflow figé ni de routeur.
+- **Outils** : `run_sql` (SELECT en lecture seule), `create_chart`, `search_reviews` (BM25 sur les commentaires), `ask_user` (demande de précision).
+- **Accès aux données** : le serveur **MCP SQL managé de Databricks** (`execute_sql`, `poll_sql_result`) ; le connecteur `databricks-sql-connector` et DuckDB (tests locaux) sont des backends alternatifs, choisis par `SQL_BACKEND`.
 
-### Tables
+## Garde-fous
 
-| Couche | Tables |
+Appliqués par le code, jamais par le LLM :
+
+- **SQL** : analyse syntaxique avec `sqlglot` ; une seule requête SELECT, tables autorisées uniquement, instructions d'écriture refusées, `LIMIT` imposé.
+- **Entrée** : refus des demandes d'écriture (suppression, création de table…), des tentatives d'injection de prompt et des demandes de secrets.
+- **Budgets** : nombre d'étapes, d'appels d'outils et de tokens par question.
+- **Sortie** : alerte quand un chiffre de la réponse n'apparaît dans aucun résultat d'outil.
+- **Avis clients** : traités comme du texte non fiable (injection indirecte possible) : encadrés par des balises, nettoyés, et le prompt interdit d'obéir à leur contenu.
+
+## Observabilité
+
+- **LangSmith** : trace de chaque question avec les appels LLM et outils imbriqués. Les configurations et secrets sont retirés des entrées tracées.
+- **Journal local** `runs/runs.jsonl` : latence totale, temps LLM, temps des outils, tokens, étapes. Exposé par `/runs` et `/stats` (moyenne, p50, p95) et affiché dans le dashboard.
+
+## Évaluation
+
+Le golden set (`agent/eval/golden_set.json`) contient **64 questions** : 45 SQL, 10 demandes à refuser, 4 questions sans réponse possible dans les données, 5 questions sur les avis. Il est séparé en `dev` (réglage du prompt) et `test` (jamais utilisé pour régler).
+
+- **Execution Accuracy** : le SQL de référence et celui de l'agent sont exécutés et leurs résultats comparés (ordre des lignes et colonnes en plus ignorés). C'est la métrique standard du text-to-SQL.
+- Autres mesures : taux de refus, taux de réponse « donnée absente », usage de `search_reviews`, latence, tokens, nombre d'étapes, et score global sur les 64 questions.
+- Un **intervalle de confiance de Wilson à 95 %** accompagne les taux, et les **erreurs techniques** (quota 429, réseau) sont réessayées puis comptées à part au lieu d'être confondues avec de mauvaises réponses.
+
+| Modèle | Backend | Questions | Score global | Execution Accuracy (SQL) | Refus |
+|---|---|---|---|---|---|
+| gpt-oss-20b (Groq) | MCP | 64 | X % | X % (45 questions) | X % |
+
+*(à compléter avec le dernier benchmark : `python -m agent.eval.evaluate`)*
+
+Limites : les 64 questions sont écrites par l'auteure sur un seul schéma, donc ces scores ne sont pas comparables à ceux de Spider ou BIRD. La latence mesurée avec l'offre gratuite d'un fournisseur reflète surtout ses limites de débit.
+
+## API
+
+| Route | Rôle |
 |---|---|
-| Silver | `silver_orders`, `silver_customers`, `silver_order_items`, `silver_products`, `silver_order_reviews` |
-| Gold (faits) | `fact_orders` (une ligne par commande), `fact_order_items` (une ligne par article) |
-| Gold (dimensions) | `dim_customers` (une ligne par personne), `dim_products` |
-| Gold (indicateurs) | `kpi_monthly_revenue`, `kpi_state_delivery`, `kpi_delay_vs_review`, `kpi_category_revenue`, `kpi_monthly_category_revenue` |
+| `POST /ask` | Pose une question à l'agent (réponse, SQL, graphiques, latences, tokens) |
+| `POST /tools/{nom}` | Appelle un outil directement (même garde-fous) |
+| `GET /results/{result_id}` | Contenu d'un résultat SQL |
+| `GET /charts/{fichier}` | Image d'un graphique |
+| `POST /guard/input`, `POST /guard/sql` | Teste les garde-fous |
+| `GET /runs`, `GET /stats` | Journal et statistiques |
+| `GET /health` | État (backend, modèle, LangSmith) |
 
-## Décisions de conception
+## Dashboard Streamlit
 
-| Décision | Justification |
-|---|---|
-| Garder toutes les lignes anormales et les marquer | Ce sont de vraies commandes : les supprimer fausserait le chiffre d'affaires |
-| `silver_orders` reçoit `customer_unique_id` et garde `customer_id` | Jointure un pour un vérifiée ; la traçabilité reste possible |
-| `fact_orders` utilise `customer_unique_id` comme clé vers `dim_customers` | Une personne passe plusieurs commandes |
-| `fact_orders` garde l'adresse de livraison de chaque commande | 252 personnes ont plusieurs adresses ; l'adresse appartient à la commande |
-| Chiffre d'affaires calculé depuis `order_items` (prix, sans les frais de port) | Les 380 écarts de paiement ne l'affectent pas |
-| Agréger avant de joindre | Une jointure directe entre articles et paiements gonfle le chiffre d'affaires de 617 471,64 |
+Chat avec l'agent (réponse, tableau, SQL, graphiques, clarifications), latence et traces, banc d'essai des outils et garde-fous, et résultats du benchmark.
 
-Les décisions sont détaillées dans [`docs/adr/`](docs/adr/).
+## Installation et lancement
 
-## Qualité des données : ce qui a été trouvé
-
-L'exploration ([`ingestion/01_exploration_olist.ipynb`](ingestion/01_exploration_olist.ipynb)) a révélé les anomalies suivantes, toutes traitées en « marquer et documenter » :
-
-| Table | Anomalie | Lignes |
-|---|---|---|
-| `orders` | Remise au transporteur avant l'approbation | 1 359 |
-| `orders` | Remise au transporteur avant l'achat | 166 |
-| `orders` | Livraison client avant l'approbation | 61 |
-| `orders` | Livraison client avant la remise au transporteur | 23 |
-| `orders` | Statut `delivered` sans date de livraison | 8 |
-| `orders` | Statut `canceled` avec une date de livraison | 6 |
-| `order_reviews` | `review_id` en double | 789 clés, 814 lignes en trop |
-| `order_payments` | Écarts entre le total des articles et le total payé | 380 |
-| `products` | Produits sans catégorie | 610 |
-| `products` | Catégories sans traduction | 2 (13 produits) |
-
-## Contrôles de réconciliation (Gold)
-
-| Contrôle | Résultat |
-|---|---|
-| `fact_orders` : lignes et commandes distinctes | 99 441 |
-| `fact_orders` : articles | 112 650 |
-| Chiffre d'affaires Gold = chiffre d'affaires Silver | 13 591 643,70, identique |
-| `dim_customers` : personnes | 96 096 |
-| `dim_products` : produits | 32 951 |
-| Chiffre d'affaires des ventes, KPI = `fact_orders` | 13 494 400,74, identique |
-| Commandes livrées par état, par groupe de retard et dans `fact_orders` | 96 470 pour les trois |
-| `fact_order_items` : lignes et clés (`order_id`, `order_item_id`) distinctes | 112 650 |
-| `fact_order_items` : chiffre d'affaires = Silver | 13 591 643,70, identique |
-| Chiffre d'affaires des ventes par catégorie, par mois et catégorie, et KPI mensuel | 13 494 400,74 pour les trois |
-| Somme des parts de chiffre d'affaires par catégorie | 100,0 % |
-
-
-## Un résultat métier
-
-Plus la livraison dépasse la date estimée, plus la note du client baisse (corrélation, pas preuve de cause) :
-
-| Retard | Commandes | Note moyenne |
-|---|---|---|
-| À l'heure ou en avance | 89 936 | 4,29 |
-| 1 à 3 jours | 1 870 | 3,29 |
-| 4 à 7 jours | 1 802 | 2,10 |
-| 8 jours et plus | 2 862 | 1,70 |
-
-Les cinq premières catégories représentent 39,8 % du chiffre d'affaires des ventes :
-
-| Catégorie | Articles vendus | Chiffre d'affaires | Part |
-|---|---|---|---|
-| `health_beauty` | 9 634 | 1 255 695,13 | 9,31 % |
-| `watches_gifts` | 5 970 | 1 198 185,21 | 8,88 % |
-| `bed_bath_table` | 11 097 | 1 035 964,06 | 7,68 % |
-| `sports_leisure` | 8 590 | 979 740,92 | 7,26 % |
-| `computers_accessories` | 7 781 | 904 322,02 | 6,70 % |
-
-Deux définitions du chiffre d'affaires coexistent : **13 591 643,70** (tous les articles) et **13 494 400,74** (ventes seules, hors commandes `canceled` et `unavailable`). Cette dernière est la définition provisoire utilisée par les KPI.
-
-## Exécuter le projet
-
-1. Télécharger le jeu de données [Brazilian E-Commerce Public Dataset by Olist](https://www.kaggle.com/datasets/olistbr/brazilian-ecommerce) sur Kaggle. La table `geolocation` n'est pas utilisée.
-2. Dans Databricks, créer les schémas `bronze`, `silver` et `gold`, puis déposer les 8 CSV dans le volume `/Volumes/workspace/bronze/raw`.
-3. Importer les notebooks de [`databricks/notebooks/`](databricks/notebooks/) et les exécuter dans l'ordre : `bronze/`, puis `silver/` (02 à 06), puis `gold/` (10 à 15).
-
-## Structure du dépôt
-
-```
-databricks/notebooks/   notebooks Bronze, Silver et Gold
-ingestion/              exploration initiale des données (en local, avec DuckDB)
-docs/                   décisions (ADR), dictionnaire de données, journal d'apprentissage
+```bash
+python -m venv .venv
+.venv\Scripts\activate            # Windows (source .venv/bin/activate sous Linux/macOS)
+pip install -r requirements-dev.txt
+cp .env.example .env              # puis renseigner les clés (ne jamais committer .env)
 ```
 
-## État d'avancement
+Variables principales (`.env`) : `LLM_BASE_URL`, `LLM_API_KEY`, `LLM_MODEL` (tout fournisseur compatible OpenAI), `SQL_BACKEND` (`mcp`, `databricks` ou `duckdb`), `DATABRICKS_SERVER_HOSTNAME`, `DATABRICKS_HTTP_PATH`, `DATABRICKS_TOKEN`, `TABLE_PREFIX`, et optionnellement `LANGSMITH_TRACING`, `LANGSMITH_API_KEY`, `LANGSMITH_PROJECT`.
 
-| Étape | État |
-|---|---|
-| Exploration et qualité des données | Terminé |
-| Pipeline Bronze, Silver, Gold | Terminé |
-| Gouvernance (dictionnaire, lineage, pseudonymisation) | Prévu |
-| Ingestion Azure (ADLS Gen2, Data Factory) | Prévu |
-| Intégration continue | Prévu |
+```bash
+python -m scripts.build_reviews_index     # index BM25 des avis (une fois)
+uvicorn api.main:app --reload             # API sur http://127.0.0.1:8000 (docs : /docs)
+streamlit run dashboard/app.py            # dashboard sur http://localhost:8501
+python cli.py "Quel est le chiffre d'affaires par mois en 2017 ?"
+```
 
-## Limites
+Avec Docker : `docker compose up --build` (l'index des avis n'est pas dans l'image).
 
-- Olist est un jeu de données déjà anonymisé : la gouvernance sera traitée comme un exercice de mise en situation.
-- La définition d'une « vente » est provisoire et sera figée dans un ADR.
-- Le projet utilise l'offre gratuite de Databricks, dont les conditions peuvent évoluer.
+Évaluation :
+
+```bash
+python -m agent.eval.evaluate --check-gold                          # vérifie les SQL de référence
+python -m agent.eval.evaluate --models groq-gpt-oss-20b --split test
+python -m agent.eval.evaluate --models groq-gpt-oss-20b,gemini-flash
+```
+
+Les profils de modèles sont dans `agent/eval/models.json` (seul le nom de la variable de clé y figure).
+
+## CI/CD
+
+Le workflow `.github/workflows/agent-ci.yml` s'exécute à chaque push et pull request :
+
+1. vérifie que `.env` n'est pas suivi par git ;
+2. lint avec `ruff` ;
+3. tests `pytest` (faux LLM et DuckDB, aucun secret requis) ;
+4. sur `main` uniquement : construction et publication des images Docker `api` et `dashboard` sur **ghcr.io**.
+
+Les images sont publiées mais ne sont déployées nulle part.
+
+## Structure
+
+```
+agent/          boucle d'agent, outils, garde-fous, prompts, backends SQL (MCP, Databricks, DuckDB), BM25
+agent/eval/     golden set, script d'évaluation, profils de modèles, résultats
+api/            API FastAPI
+dashboard/      interface Streamlit
+scripts/        connexion, tests LLM/MCP/LangSmith, construction de l'index des avis
+databricks/     notebooks bronze, silver, gold
+tests/          tests unitaires (faux LLM, DuckDB)
+.github/        CI/CD
+```
+
+## Limites connues
+
+- Jeu de données petit : ne pas lire ce projet comme un cas « big data ».
+- Le serveur MCP SQL de Databricks est en bêta (asynchrone, résultats tronqués) ; l'index des avis est donc construit avec le connecteur.
+- BM25 est lexical : il ne comprend pas les synonymes. Une recherche sémantique (embeddings) serait la suite naturelle.
+- Les modèles gratuits ont des quotas stricts et ne sont pas parfaitement déterministes : les scores varient légèrement d'une exécution à l'autre.
+- Les questions du golden set sont peu nombreuses : lire les intervalles de confiance, pas seulement les moyennes.
