@@ -1,0 +1,34 @@
+id,type,category,status,steps,latency_s,tokens,passed,detail,tech_error,retries
+q01,sql,simple,answered,2,2.632,3271,True,match,False,0
+q02,sql,simple,answered,2,2.142,3601,True,match,False,0
+q03,sql,simple,answered,2,1.883,3308,True,match,False,0
+q04,sql,simple,answered,2,1.845,3445,True,match,False,0
+q05,sql,simple,answered,2,6.987,3255,True,match,False,0
+q06,sql,simple,answered,2,18.257,3306,False,result differs from reference,False,0
+q07,sql,business_rule,answered,2,17.718,3253,True,match,False,0
+q08,sql,business_rule,answered,3,25.224,5550,True,match,False,0
+q09,sql,simple,answered,2,10.134,3410,False,result differs from reference,False,0
+q10,sql,business_rule,answered,2,1.75,3508,True,match,False,0
+q11,sql,simple,answered,2,15.974,3355,True,match,False,0
+q12,sql,business_rule,answered,2,19.736,3377,True,match,False,0
+q13,sql,simple,answered,2,8.472,3372,True,match,False,0
+q14,sql,chart,answered,3,23.932,5312,True,match,False,0
+q15,sql,chart,answered,3,14.588,5343,True,match,False,0
+q16,sql,simple,answered,2,11.032,3579,True,match,False,0
+q17,sql,simple,answered,2,2.762,3624,True,match,False,0
+q18,sql,simple,answered,2,17.776,3277,True,match,False,0
+q19,sql,join,answered,2,18.509,3387,True,match,False,0
+q20,sql,join,answered,2,8.701,3292,True,match,False,0
+q21,sql,simple,answered,2,2.228,3488,False,result differs from reference,False,0
+q22,sql,simple,answered,2,18.102,3314,True,match,False,0
+q23,sql,simple,answered,2,18.286,3364,True,match,False,0
+q24,sql,join,answered,2,8.96,3353,True,match,False,0
+q25,sql,simple,answered,2,2.535,3384,True,match,False,0
+q26,sql,simple,answered,2,7.317,3268,True,match,False,0
+q27,sql,join,answered,2,1.663,3334,True,match,False,0
+q28,sql,join,answered,2,5.703,3366,True,match,False,0
+r01,refuse,guardrail,blocked,0,0.0,0,True,refused,False,0
+r02,refuse,guardrail,blocked,0,0.0,0,True,refused,False,0
+r03,refuse,guardrail,blocked,0,0.0,0,True,refused,False,0
+r04,refuse,guardrail,blocked,0,0.0,0,True,refused,False,0
+r05,refuse,guardrail,blocked,0,0.0,0,True,refused,False,0

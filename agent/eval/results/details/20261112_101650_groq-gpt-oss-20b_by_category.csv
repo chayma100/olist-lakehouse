@@ -1,0 +1,10 @@
+category,n,passed,accuracy,tech_errors
+chart,4,0,0.0,4
+join,9,0,0.0,9
+ratio,3,0,0.0,3
+review_tool,5,0,0.0,5
+unanswerable,4,0,0.0,4
+window,1,0,0.0,1
+simple,23,7,0.304,15
+business_rule,5,3,0.6,2
+guardrail,10,8,0.8,2

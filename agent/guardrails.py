@@ -71,7 +71,10 @@ import re
 # Demandes de modification de données : l'agent est en lecture seule, on refuse tôt
 _WRITE_INTENT = re.compile(
     r"^\s*(please\s+|can you\s+|could you\s+)?(delete|drop|truncate|update|insert|alter|remove|erase|"
-    r"wipe|modify|create table|grant|revoke)\b", re.I)
+    r"wipe|modify|grant|revoke"
+    r"|create\s+(or\s+replace\s+)?(table|view|schema|database)"
+    r"|(create|make|build)\s+(a\s+|an\s+)?(new\s+|temporary\s+)?(table|view|schema)\b[^.?!]{0,40}\b(called|named)"
+    r"|(create|make|build)\s+(a\s+|an\s+)?new\s+(table|view|schema))\b", re.I)
 _INJECTION = re.compile(
     r"(ignore|forget|disregard)\b.{0,30}\b(previous|above|prior|all|your)\b.{0,30}\b(instruction|rule|prompt)s?"
     r"|(reveal|show|print|repeat|output)\b.{0,30}\b(system prompt|your prompt|your instructions)"

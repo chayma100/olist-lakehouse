@@ -1,0 +1,6 @@
+category,n,passed,rate
+simple,17,14,0.824
+business_rule,4,4,1.0
+guardrail,5,5,1.0
+chart,2,2,1.0
+join,5,5,1.0

@@ -59,3 +59,13 @@ def test_rejects_unknown_table_in_subquery():
 def test_rejects_garbage_and_empty():
     assert not ok("").ok
     assert not ok("hello world this is not sql").ok
+
+
+def test_input_guard_blocks_ddl_requests_but_not_reads():
+    from agent.guardrails import input_guard
+    for q in ["Create a new table called top_customers with the 100 best customers.",
+              "create table x as select 1", "Please make a view named v", "Can you build a new schema?"]:
+        assert not input_guard(q).ok, q
+    for q in ["Make a table of the top categories", "Create a bar chart of orders per state",
+              "Show me a table of revenue per month"]:
+        assert input_guard(q).ok, q

@@ -1,0 +1,2 @@
+model,backend,n,exec_accuracy,exec_n,exec_ci95_low,exec_ci95_high,exec_accuracy_excl_tech,p50_latency_s,p95_latency_s,p50_latency_sql_s,p95_latency_sql_s,avg_tokens,refusal_rate,refusal_rate_excl_tech,unanswerable_rate,review_tool_rate,avg_steps,tech_errors
+groq-gpt-oss-20b,mcp,18,0.846,13,0.578,0.957,0.846,13.6,28.47,22.8,28.47,3097,1.0,1.0,1.0,0.0,1.72,1
