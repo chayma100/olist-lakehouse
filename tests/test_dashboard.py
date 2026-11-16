@@ -71,7 +71,7 @@ def run_app():
 def test_app_loads_and_shows_health(fake_api):
     at = run_app()
     assert not at.exception
-    assert any("API online" in s.value for s in at.sidebar.success)
+    assert any("Online" in m.value for m in at.sidebar.markdown)
     assert any("LangSmith: ON" in c.value for c in at.sidebar.caption)
 
 

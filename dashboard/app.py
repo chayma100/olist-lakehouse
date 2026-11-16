@@ -34,6 +34,62 @@ STATUS_LABEL = {
 
 st.set_page_config(page_title="Olist data agent", page_icon="📊", layout="wide")
 
+STYLE = """
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&display=swap');
+html, body, .stApp, button, input, textarea { font-family: 'Figtree', sans-serif; }
+.block-container { padding-top: 2.2rem; max-width: 1080px; }
+footer, [data-testid="stDeployButton"] { display: none; }
+
+/* en-tête */
+.hero h1 { font-size: 2.1rem; font-weight: 700; letter-spacing: -0.02em; margin: 0 0 .35rem; color: #10212B; }
+.hero p { font-size: 1.02rem; color: #4A5D69; max-width: 60ch; line-height: 1.5; margin: 0 0 1.4rem; }
+
+/* onglets */
+.stTabs [data-baseweb="tab-list"] { gap: 1.4rem; border-bottom: 1px solid #DDE3E7; }
+.stTabs [data-baseweb="tab"] { padding: .5rem 0; font-weight: 600; color: #5B6B76; }
+.stTabs [aria-selected="true"] { color: #0A7C79; }
+
+/* messages : la réponse de l'agent porte une barre de statut à gauche */
+[data-testid="stChatMessage"] { background: #FFFFFF; border: 1px solid #E3E8EB; border-radius: 10px;
+    padding: 1rem 1.2rem; margin-bottom: .8rem; }
+.chip { display: inline-block; font-size: .78rem; font-weight: 600; padding: .15rem .6rem;
+    border-radius: 999px; margin-bottom: .5rem; }
+.chip-success { background: #DCF2EF; color: #075E5B; }
+.chip-warning { background: #FBEBCB; color: #7A4B00; }
+.chip-info { background: #DDEAF6; color: #1F4E79; }
+.chip-error { background: #F8DADA; color: #8A1C1C; }
+
+/* indicateurs */
+[data-testid="stMetric"] { background: #FFFFFF; border: 1px solid #E3E8EB; border-radius: 10px;
+    padding: .7rem .9rem; }
+[data-testid="stMetricLabel"] { color: #5B6B76; }
+
+/* cartes d'exemples */
+.stButton > button { border-radius: 8px; border: 1px solid #CBD5DB; background: #FFFFFF;
+    text-align: left; font-weight: 500; transition: border-color .15s; }
+.stButton > button { justify-content: flex-start; height: auto; min-height: 2.6rem; padding: .5rem .8rem; }
+.stButton > button div { justify-content: flex-start; width: 100%; }
+.stButton > button p { text-align: left; white-space: normal; line-height: 1.35; }
+.stButton > button:hover { border-color: #0A7C79; color: #0A7C79; }
+
+/* barre latérale */
+[data-testid="stSidebar"] { background: #10212B; }
+[data-testid="stSidebar"] h1, [data-testid="stSidebar"] p, [data-testid="stSidebar"] label,
+[data-testid="stSidebar"] [data-testid="stCaptionContainer"] { color: #D5E0E6; }
+[data-testid="stSidebar"] h1 { font-size: 1.25rem; font-weight: 700; }
+[data-testid="stSidebar"] .stButton > button { background: transparent; border: 1px solid #2E4756;
+    color: #E6EDF0; font-size: .86rem; }
+[data-testid="stSidebar"] .stButton > button:hover { border-color: #5FD3CC; color: #5FD3CC; }
+.sb-status { display: flex; align-items: center; gap: .5rem; font-size: .88rem; color: #D5E0E6;
+    margin: .2rem 0 .8rem; }
+.sb-status .dot { width: .6rem; height: .6rem; border-radius: 50%; background: #5FD3CC; flex: none; }
+.sb-status.off .dot { background: #E5736A; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+"""
+st.markdown(STYLE, unsafe_allow_html=True)
+
 # Accès protégé (optionnel) : l'agent consomme un quota LLM, on évite l'usage anonyme.
 _password = os.getenv("APP_PASSWORD")
 if _password and st.session_state.get("authed") is not True:
@@ -53,7 +109,7 @@ def client() -> ApiClient:
 
 def show_reply(msg: dict) -> None:
     kind, label = STATUS_LABEL.get(msg["status"], ("error", msg["status"]))
-    getattr(st, kind)(label)
+    st.markdown(f'<span class="chip chip-{kind}">{label}</span>', unsafe_allow_html=True)
     st.markdown(msg["answer"])
     for url in msg.get("charts", []):
         try:
@@ -96,25 +152,38 @@ def show_reply(msg: dict) -> None:
 
 with st.sidebar:
     st.title("Olist data agent")
-    st.text_input("API URL", value=os.getenv("API_URL", "http://127.0.0.1:8000"), key="api_url",
-                  disabled=bool(os.getenv("API_URL")))
+    if os.getenv("EMBEDDED_API") != "1":
+        st.text_input("API URL", value=os.getenv("API_URL", "http://127.0.0.1:8000"), key="api_url",
+                      disabled=bool(os.getenv("API_URL")))
     try:
         health = client().health()
-        st.success(f"API online | backend: {health['sql_backend']} | model: {health['model'] or 'n/a'}")
+        st.markdown(
+            f'<div class="sb-status"><span class="dot"></span>'
+            f'<span>Online, {health["sql_backend"]} backend<br>model {health["model"] or "n/a"}</span></div>',
+            unsafe_allow_html=True)
         tr = health.get("tracing", {})
         st.caption(f"LangSmith: {'ON, project ' + tr.get('project', '') if tr.get('langsmith') else 'off'}")
     except ApiError as e:
-        st.error(str(e))
-    st.markdown("**Examples**")
-    for i, q in enumerate(EXAMPLES):
-        if st.button(q, key=f"ex{i}", use_container_width=True):
-            st.session_state["queued"] = q
+        st.markdown('<div class="sb-status off"><span class="dot"></span><span>API unreachable</span></div>',
+                    unsafe_allow_html=True)
+        st.caption(str(e))
+    if st.session_state.get("messages"):
+        st.markdown("**Examples**")
+        for i, q in enumerate(EXAMPLES):
+            if st.button(q, key=f"ex{i}", use_container_width=True):
+                st.session_state["queued"] = q
     if st.button("Clear conversation"):
         st.session_state["messages"] = []
         st.session_state["pending"] = None
 
 st.session_state.setdefault("messages", [])
 st.session_state.setdefault("pending", None)
+
+st.markdown(
+    '<div class="hero"><h1>Ask the Olist data</h1>'
+    "<p>About 100,000 Brazilian e-commerce orders. The agent writes read-only SQL, checks it "
+    "against guardrails, runs it, and shows you the query and the numbers behind each answer.</p></div>",
+    unsafe_allow_html=True)
 
 tab_chat, tab_latency, tab_tools, tab_quality = st.tabs(
     ["Chat", "Latency & traces", "Tools playground", "Quality (benchmark)"])
@@ -128,6 +197,13 @@ with tab_chat:
                 st.markdown(m["content"])
             else:
                 show_reply(m["reply"])
+
+    if not st.session_state["messages"]:
+        st.caption("Start with a question, or pick one:")
+        cols = st.columns(2)
+        for i, q in enumerate(EXAMPLES[:4]):
+            if cols[i % 2].button(q, key=f"home{i}", use_container_width=True):
+                st.session_state["queued"] = q
 
     prompt = st.session_state.pop("queued", None) or st.chat_input("Ask a question about the Olist data")
     if prompt:
