@@ -34,6 +34,15 @@ STATUS_LABEL = {
 
 st.set_page_config(page_title="Olist data agent", page_icon="📊", layout="wide")
 
+# Accès protégé (optionnel) : l'agent consomme un quota LLM, on évite l'usage anonyme.
+_password = os.getenv("APP_PASSWORD")
+if _password and st.session_state.get("authed") is not True:
+    typed = st.text_input("Password", type="password")
+    if typed and typed == _password:
+        st.session_state["authed"] = True
+        st.rerun()
+    st.stop()
+
 
 def client() -> ApiClient:
     return ApiClient(st.session_state.get("api_url"))
