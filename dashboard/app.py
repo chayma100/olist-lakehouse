@@ -167,30 +167,36 @@ with st.sidebar:
         st.markdown('<div class="sb-status off"><span class="dot"></span><span>API unreachable</span></div>',
                     unsafe_allow_html=True)
         st.caption(str(e))
-    if st.session_state.get("messages"):
+    section = st.radio("Section", ["Agent", "Evaluation"], key="section", label_visibility="collapsed")
+    if section == "Agent" and st.session_state.get("messages"):
         st.markdown("**Examples**")
         for i, q in enumerate(EXAMPLES):
             if st.button(q, key=f"ex{i}", use_container_width=True):
                 st.session_state["queued"] = q
-    if st.button("Clear conversation"):
+    if section == "Agent" and st.button("Clear conversation"):
         st.session_state["messages"] = []
         st.session_state["pending"] = None
 
 st.session_state.setdefault("messages", [])
 st.session_state.setdefault("pending", None)
 
-st.markdown(
-    '<div class="hero"><h1>Ask the Olist data</h1>'
-    "<p>About 100,000 Brazilian e-commerce orders. The agent writes read-only SQL, checks it "
-    "against guardrails, runs it, and shows you the query and the numbers behind each answer.</p></div>",
-    unsafe_allow_html=True)
+if section == "Agent":
+    st.markdown(
+        '<div class="hero"><h1>Ask the Olist data</h1>'
+        "<p>About 100,000 Brazilian e-commerce orders. The agent writes read-only SQL, checks it "
+        "against guardrails, runs it, and shows you the query and the numbers behind each answer.</p></div>",
+        unsafe_allow_html=True)
+else:
+    st.markdown(
+        '<div class="hero"><h1>Evaluation</h1>'
+        "<p>How fast the agent answers, how often its SQL returns the right result on the golden set, "
+        "and what a second model thinks of the written answers.</p></div>",
+        unsafe_allow_html=True)
 
-tab_chat, tab_latency, tab_tools, tab_quality = st.tabs(
-    ["Chat", "Latency & traces", "Tools playground", "Quality (benchmark)"])
 
 # ------------------------------------------------------------------ onglet chat
 
-with tab_chat:
+def page_chat() -> None:
     for m in st.session_state["messages"]:
         with st.chat_message(m["role"]):
             if m["role"] == "user":
@@ -225,7 +231,7 @@ with tab_chat:
 
 # ------------------------------------------------------------------ onglet latence
 
-with tab_latency:
+def page_latency() -> None:
     st.subheader("Latency and runs")
     try:
         runs = client().runs(200)
@@ -260,7 +266,7 @@ with tab_latency:
 
 # ------------------------------------------------------------------ onglet tools
 
-with tab_tools:
+def page_tools() -> None:
     st.subheader("Guardrails")
     g1, g2 = st.columns(2)
     with g1:
@@ -321,16 +327,90 @@ with tab_tools:
 
 # ------------------------------------------------------------------ onglet qualité
 
-with tab_quality:
-    st.subheader("Benchmark")
+def page_quality() -> None:
+    st.subheader("Model benchmark")
     results_dir = os.getenv("EVAL_RESULTS_DIR", "agent/eval/results")
     files = sorted(glob.glob(os.path.join(results_dir, "*.csv")), key=os.path.getmtime)
     if not files:
-        st.info(f"No benchmark yet. Put a CSV in {results_dir} with columns: model, backend, n, "
-                "exec_accuracy, p50_latency_s, p95_latency_s, avg_tokens, refusal_rate.")
-    else:
-        bench = pd.read_csv(files[-1])
-        st.caption(os.path.basename(files[-1]))
-        st.dataframe(bench, use_container_width=True, hide_index=True)
-        if {"model", "exec_accuracy"} <= set(bench.columns):
-            st.bar_chart(bench.set_index("model")["exec_accuracy"])
+        st.info(f"No benchmark yet. Run `python -m agent.eval.evaluate` to create one in {results_dir}.")
+        return
+    runs = {os.path.basename(f): pd.read_csv(f) for f in files}
+
+    def noisy(df: pd.DataFrame) -> bool:
+        return "tech_errors" in df.columns and (df["tech_errors"].fillna(0) / df["n"].clip(lower=1)).max() > 0.1
+
+    clean = [name for name, df in runs.items() if not noisy(df)]
+    names = list(runs)[::-1]
+    pick = st.selectbox("Run", names, index=names.index(clean[-1]) if clean else 0,
+                        format_func=lambda n: n + ("  (many technical errors)" if noisy(runs[n]) else ""))
+    bench = runs[pick]
+    if noisy(bench):
+        st.warning("More than 10 % of this run ended on technical errors (rate limits, network). "
+                   "Its scores measure the quota, not the model. Pick a clean run.")
+    show = [c for c in ["model", "backend", "n", "exec_accuracy", "exec_ci95_low", "exec_ci95_high",
+                        "p50_latency_s", "p95_latency_s", "avg_tokens", "refusal_rate", "tech_errors"]
+            if c in bench.columns]
+    st.dataframe(bench[show], use_container_width=True, hide_index=True)
+    if {"model", "exec_accuracy"} <= set(bench.columns):
+        st.caption("Execution accuracy by model")
+        st.bar_chart(bench.set_index("model")["exec_accuracy"], height=240)
+    detail_dir = os.path.join(results_dir, "details")
+    detail_files = sorted(glob.glob(os.path.join(detail_dir, pick.replace(".csv", "") + "_*.csv")))
+    detail_files = [f for f in detail_files if not f.endswith("_by_category.csv")]
+    if detail_files:
+        st.caption("Failed questions")
+        for f in detail_files:
+            d = pd.read_csv(f)
+            tech = d["tech_error"].astype(str) == "True" if "tech_error" in d else False
+            bad = d[(d["passed"].astype(str) != "True") & ~tech]
+            with st.expander(f"{os.path.basename(f)}: {len(bad)} failed of {len(d)}"):
+                st.dataframe(bad[["id", "category", "status", "detail"]], use_container_width=True,
+                             hide_index=True)
+
+
+# ------------------------------------------------------------------ page juge (LLM-as-judge)
+
+
+def page_judge() -> None:
+    st.subheader("LLM as a judge")
+    st.write("A second model grades the written answers on criteria that SQL results cannot check: "
+             "are the numbers in the answer present in the tool results, does the answer contradict "
+             "the data, are review summaries supported by the retrieved comments.")
+    judge_dir = os.path.join(os.getenv("EVAL_RESULTS_DIR", "agent/eval/results"), "judge")
+    files = sorted(glob.glob(os.path.join(judge_dir, "*.csv")), key=os.path.getmtime)
+    if not files:
+        st.info("No judge run yet. Verdicts will appear here once `agent/eval/results/judge/*.csv` exists "
+                "with columns: id, question, criterion, passed, reason, judge_model, candidate_model.")
+        return
+    pick = st.selectbox("Judge run", [os.path.basename(f) for f in files][::-1])
+    d = pd.read_csv(os.path.join(judge_dir, pick))
+    d["passed"] = d["passed"].astype(str) == "True"
+    c = st.columns(3)
+    c[0].metric("Judge model", d["judge_model"].iloc[0] if "judge_model" in d else "n/a")
+    c[1].metric("Candidate model", d["candidate_model"].iloc[0] if "candidate_model" in d else "n/a")
+    c[2].metric("Questions judged", d["id"].nunique())
+    st.caption("Pass rate by criterion")
+    st.dataframe(d.groupby("criterion")["passed"].agg(["mean", "count"]).rename(
+        columns={"mean": "pass_rate", "count": "judged"}).round(3).reset_index(),
+        use_container_width=True, hide_index=True)
+    st.caption("Failed verdicts with the judge's reason")
+    st.dataframe(d[~d["passed"]][["id", "criterion", "question", "reason"]],
+                 use_container_width=True, hide_index=True)
+
+
+# ------------------------------------------------------------------ navigation
+
+if section == "Agent":
+    t_chat, t_tools = st.tabs(["Chat", "Tools playground"])
+    with t_chat:
+        page_chat()
+    with t_tools:
+        page_tools()
+else:
+    t_time, t_bench, t_judge = st.tabs(["Response time", "Model benchmark", "LLM judge"])
+    with t_time:
+        page_latency()
+    with t_bench:
+        page_quality()
+    with t_judge:
+        page_judge()
