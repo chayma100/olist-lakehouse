@@ -47,11 +47,13 @@ Le golden set (`agent/eval/golden_set.json`) contient **64 questions** : 45 SQL,
 - Autres mesures : taux de refus, taux de réponse « donnée absente », usage de `search_reviews`, latence, tokens, nombre d'étapes, et score global sur les 64 questions.
 - Un **intervalle de confiance de Wilson à 95 %** accompagne les taux, et les **erreurs techniques** (quota 429, réseau) sont réessayées puis comptées à part au lieu d'être confondues avec de mauvaises réponses.
 
-| Modèle | Backend | Questions | Score global | Execution Accuracy (SQL) | Refus |
-|---|---|---|---|---|---|
-| gpt-oss-20b (Groq) | MCP | 64 | X % | X % (45 questions) | X % |
+| Modèle | Backend | Questions | Score global | Execution Accuracy (SQL) | Refus corrects | Latence p50 / p95 |
+|---|---|---|---|---|---|---|
+| gpt-oss-20b (Groq) | MCP | 64 | 84,4 % (54/64) | 88,9 % (40/45), IC 95 % : 76,5 – 95,2 % | 90 % | 10,0 s / 27,6 s |
 
-*(à compléter avec le dernier benchmark : `python -m agent.eval.evaluate`)*
+Run du 12 nov. 2026 (`agent/eval/results/20261112_094840.csv`), 2 erreurs techniques (quota) comptées à part. Un run ultérieur (`20261112_101650.csv`) a été interrompu par des quotas Groq (45 erreurs techniques sur 45 questions SQL) : il est conservé tel quel, ne pas le lire comme un score du modèle.
+
+**Comparaison avec Gemini 2.5 Flash : non concluante.** Le seul run disponible (`20261111_014638.csv`, 33 questions) est dominé par des erreurs 429 (quota gratuit) sur 20 questions : son score de 28,6 % mesure le quota, pas le modèle. À refaire avant toute comparaison.
 
 Limites : les 64 questions sont écrites par l'auteure sur un seul schéma, donc ces scores ne sont pas comparables à ceux de Spider ou BIRD. La latence mesurée avec l'offre gratuite d'un fournisseur reflète surtout ses limites de débit.
 
