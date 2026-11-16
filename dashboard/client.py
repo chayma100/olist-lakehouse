@@ -16,8 +16,14 @@ class ApiClient:
         self.timeout = timeout
 
     def _request(self, method: str, path: str, **kwargs) -> httpx.Response:
+        headers = {}
+        key = os.getenv("API_ACCESS_KEY")
+        # La clé n'est envoyée qu'à l'URL configurée, jamais à une URL saisie par un visiteur.
+        if key and self.base_url == DEFAULT_URL.rstrip("/"):
+            headers["X-API-Key"] = key
         try:
-            r = httpx.request(method, f"{self.base_url}{path}", timeout=self.timeout, **kwargs)
+            r = httpx.request(method, f"{self.base_url}{path}", timeout=self.timeout,
+                              headers=headers, **kwargs)
         except httpx.HTTPError as e:
             raise ApiError(f"Cannot reach the API at {self.base_url} ({type(e).__name__}). "
                            "Start it with: uvicorn api.main:app --reload") from e

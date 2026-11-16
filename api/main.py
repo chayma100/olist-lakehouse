@@ -8,11 +8,12 @@ Documentation interactive (tester sans code) :
 import json
 import os
 import re
+import secrets
 import time
 from collections import OrderedDict
 from functools import lru_cache
 
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
@@ -45,9 +46,24 @@ def _no_terminal(question: str) -> str:
     raise NeedsUserInput(question)
 
 
+def require_api_key(request: Request) -> None:
+    """Protège l'API publique : si API_ACCESS_KEY est défini, l'en-tête X-API-Key est obligatoire.
+
+    Sans clé, n'importe qui pourrait consommer le quota du LLM et interroger l'entrepôt.
+    /health reste ouvert (sonde de l'hébergeur). Sans variable (dev local), rien n'est exigé.
+    """
+    expected = os.getenv("API_ACCESS_KEY", "")
+    if not expected or request.url.path == "/health":
+        return
+    given = request.headers.get("X-API-Key", "")
+    if not secrets.compare_digest(given.encode(), expected.encode()):
+        raise HTTPException(status_code=401, detail="Missing or invalid X-API-Key")
+
+
 def create_app(cfg: Config | None = None, llm=None, backend=None) -> FastAPI:
     """Fabrique l'application. Les paramètres servent aux tests (faux LLM, base locale)."""
-    app = FastAPI(title="Olist text-to-SQL agent", version="0.1")
+    app = FastAPI(title="Olist text-to-SQL agent", version="0.1",
+                  dependencies=[Depends(require_api_key)])
     app.add_middleware(CORSMiddleware, allow_origins=(cfg or Config()).cors_origins,
                        allow_methods=["*"], allow_headers=["*"])
 

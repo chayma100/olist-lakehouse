@@ -87,7 +87,8 @@ def show_reply(msg: dict) -> None:
 
 with st.sidebar:
     st.title("Olist data agent")
-    st.text_input("API URL", value=os.getenv("API_URL", "http://127.0.0.1:8000"), key="api_url")
+    st.text_input("API URL", value=os.getenv("API_URL", "http://127.0.0.1:8000"), key="api_url",
+                  disabled=bool(os.getenv("API_URL")))
     try:
         health = client().health()
         st.success(f"API online | backend: {health['sql_backend']} | model: {health['model'] or 'n/a'}")
