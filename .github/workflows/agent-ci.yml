@@ -1,9 +1,12 @@
 name: agent-ci
 
 on:
-  push:
-    branches: [main]
+  push:          # chaque push, sur n'importe quelle branche
   pull_request:
+
+concurrency:     # un nouveau push annule le run précédent de la même branche
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
