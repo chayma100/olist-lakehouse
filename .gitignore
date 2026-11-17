@@ -39,3 +39,5 @@ runs/
 outputs/
 data/reviews_index/
 .vscode/
+.streamlit/secrets.toml
+.streamlit/config.local.bak
