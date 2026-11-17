@@ -1,0 +1,13 @@
+# Dépendances pour Streamlit Community Cloud (agent exécuté dans l'application)
+openai
+sqlglot
+pandas
+matplotlib
+python-dotenv
+databricks-sql-connector
+mcp
+fastapi
+uvicorn
+langsmith
+httpx
+streamlit

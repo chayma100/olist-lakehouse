@@ -31,3 +31,11 @@ infra/terraform/.terraform/
 
 # Divers
 .DS_Store
+
+# Fichiers personnels / brouillons
+.github/copilot-instructions.md
+agent/eval/evaluate gdim.py
+runs/
+outputs/
+data/reviews_index/
+.vscode/
